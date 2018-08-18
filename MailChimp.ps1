@@ -5,11 +5,12 @@
 class MailChimp {
     # Connector Reference: https://docs.microsoft.com/en-us/connectors/mailchimp/
     
-           [string]         $Version = '0.0.1'
+           [string]         $Version = '2018.08.18'
+           [string]         $UserAgent = "PowerShell/MailChimp-API/3.0 (github.com/MaksimKlyu/MailChimp-API/$( $this.Version ))"
            [string]         $ApiEndPoint = 'https://<dc>.api.mailchimp.com/3.0/'
            [int16]          $ApiRequestCount = 10
            [int16]          $ApiRequestTimeoutSec = 15
-           [PSCustomObject] $Self
+           [PSCustomObject] $ApiRoot
     hidden [string]         $ApiKey
     hidden [hashtable]      $Headers
 
@@ -19,13 +20,17 @@ class MailChimp {
     MailChimp( [string]$ApiKey, [string]$ApiEndPoint ) {
         Set-StrictMode -Version Latest
         $ErrorActionPreference = 'Stop'
+        
         if ( $ApiEndPoint.Trim() -eq '' ) {
-            $this.ApiEndPoint = $this.ApiEndPoint -replace '<dc>', $this.GetDataCenter($ApiKey) #TODO: [2] -> DataCenter
+            $this.ApiEndPoint = $this.ApiEndPoint -replace '<dc>', $this.GetDataCenter($ApiKey)
         } else {
             $this.ApiEndPoint = $ApiEndPoint;
         }
+
         $this.SetHeaders($ApiKey)
-        $this.Self = $this.InvokeWebRequest( $this.ApiEndPoint, 'GET' )
+        
+        #This resource is nothing more than links to other resources available through the API.
+        $this.ApiRoot = $this.InvokeWebRequest( $this.ApiEndPoint, 'GET' )
 	}
 
     #
@@ -53,7 +58,7 @@ class MailChimp {
         }
     }
 
-    [void]SetApiApiRequestTimeoutSec( [int16]$TimeoutSec ){
+    [void]SetApiRequestTimeoutSec( [int16]$TimeoutSec ){
         if ($TimeoutSec -gt 0) {
             $this.ApiRequestTimeoutSec = $TimeoutSec
         }
@@ -97,71 +102,47 @@ class MailChimp {
 
     # Get information about all lists
     [Object]GetLists() {
-        $fields = ''
-        $link = $this.GetLinkObject( $this.Self, 'lists' )
-        try {
-            return $this.GetObjects( $link.href, $link.method, 'lists', $fields )
-        } catch {
-            throw "Failed to Get mailchim all lists: $( $_.Exception.Message )"
-        }
+        $link = $this.GetLinkObject( $this.ApiRoot, 'lists' )
+        return $this.GetObjects( $link.href, $link.method, 'lists', $null )
+    }
+
+    # Get information about a list's segments
+    [Object]GetListSegments( [PSCustomObject]$ListObject ) {
+        $link = $ListObject._links | Where-Object rel -eq 'segments'
+        return $this.GetObjects( $link.href, $link.method, 'segments', $null )
     }
 
     # Get information about a list's interest categories
-    [Object]GetInterestCategories( [PSCustomObject]$ListObject ) {
-        $fields = ''
+    [Object]GetListInterestCategories( [PSCustomObject]$ListObject ) {
         $link = $ListObject._links | Where-Object rel -eq 'interest-categories'
-        try {
-            return $this.GetObjects( $link.href, $link.method, 'categories', $fields )
-        } catch {
-            throw "Failed to Get mailchim all lists: $( $_.Exception.Message )"
-        }
+        return $this.GetObjects( $link.href, $link.method, 'categories', $null )
     }
 
     # Get all interests in a specific category
-    [Object]GetInterests( [PSCustomObject]$InterestCategoryObject ) {
-        $fields = ''
+    [Object]GetListInterests( [PSCustomObject]$InterestCategoryObject ) {
         $link = $InterestCategoryObject._links | Where-Object rel -eq 'interests'
-        try {
-            return $this.GetObjects( $link.href, $link.method, 'interests', $fields )
-        } catch {
-            throw "Failed to Get mailchim all lists: $( $_.Exception.Message )"
-        }
+        return $this.GetObjects( $link.href, $link.method, 'interests', $null )
     }
 
     # Get information about members in a specific MailChimp list
-    [Object]GetListMembers( [PSCustomObject]$ListObject ) {
-        
-        $fields = 'members.id,members.email_address,members.status,members.merge_fields,members.interests'
+    [Object]GetListMembers( [PSCustomObject]$ListObject, [string]$Fields ) {
         $link = $this.GetLinkObject( $ListObject, 'members' )
-        try {
-            return $this.GetObjects( $link.href, $link.method, 'members', $fields )
-        } catch {
-            throw "Failed to Get mailchim all lists: $( $_.Exception.Message )"
-        }
+        return $this.GetObjects( $link.href, $link.method, 'members', $fields )
     }
-
 
     [PSCustomObject]InvokeWebRequest( [string]$Uri, [string]$HttpMethod ){
-        $UserAgent = 'PowerShell/MailChimp-API/3.0 (github.com/MaksimKlyu/MailChimp-API)'
         try {
-            return Invoke-WebRequest -Uri $Uri -Method $HttpMethod -Headers $this.Headers -UserAgent $UserAgent -TimeoutSec $this.ApiRequestTimeoutSec | ConvertFrom-Json
+            return Invoke-WebRequest -Uri $Uri -Method $HttpMethod -Headers $this.Headers -UserAgent $this.UserAgent -TimeoutSec $this.ApiRequestTimeoutSec | ConvertFrom-Json
         } catch {
-            throw "Web Request '$Uri' failed : $( $_.ErrorDetails.Message )"
+            throw "Request '$Uri' failed: $( $_.ErrorDetails.Message )"
         }
     }
 
-    # [string]ToString(){
-    #     return "Hello, I'm MailChimp-API/3.0`nClass version: {0}`nApiEndPoint: {1}" -f $this.Version, $this.ApiEndPoint
-    # }
+    [PSCustomObject]InvokeRestMethod( [string]$Uri, [string]$HttpMethod ){
+        try {
+            return Invoke-RestMethod -Uri $Uri -Method $HttpMethod -Headers $this.Headers -UserAgent $this.UserAgent -TimeoutSec $this.ApiRequestTimeoutSec
+        } catch {
+            throw "Request '$Uri' failed: $( $_.ErrorDetails.Message )"
+        }
+    }
 }
-
-# Examle
-#
-# $MailChimp          = New-Object MailChimp ( '<32>-us17', $null )
-# $Lists              = $MailChimp.GetLists()
-# $List               = $lists | Where-Object Name -eq 'Internal news' #'Test List'
-# $InterestCategories = $MailChimp.GetInterestCategories( $List )
-# $InterestCategory   = $InterestCategories | Where-Object Title -eq 'Internal Groups'
-
-# $GetInterests       = $MailChimp.GetInterests( $InterestCategory )
-# $ListMembers        = $MailChimp.GetListMembers( $List )
