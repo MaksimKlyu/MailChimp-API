@@ -1,9 +1,9 @@
-﻿#requires -version 5.1
+﻿#requires -version 5
 # Link: https://github.com/MaksimKlyu/MailChimp-API.git
 # Author: Maxim A. Klyunnikov
 
 class MailChimp {
-    [string]           $Version = '2018.08.21'
+    [string]           $Version = '2018.08.22'
     [string]           $UserAgent = "PowerShell/MailChimp-API/3.0 (github.com/MaksimKlyu/MailChimp-API/$( $this.Version ))"
     [string]           $ApiEndPoint = 'https://<dc>.api.mailchimp.com/3.0/'
     [int16]            $ApiRequestCount = 10
@@ -13,9 +13,6 @@ class MailChimp {
     hidden [string]    $ApiKey
     hidden [hashtable] $Headers
 
-    # Create a new instance
-    # @param string $api_key      Your MailChimp API key
-    # @param string $api_endpoint Optional custom API endpoint
     MailChimp( [string]$ApiKey, [string]$ApiEndPoint ) {
         Set-StrictMode -Version Latest
         $ErrorActionPreference = 'Stop'
@@ -60,31 +57,31 @@ class MailChimp {
     # Get information about all lists
     [Object]GetLists() {
         $Link = $this.ApiEndPoint + "lists"
-        return $this.GetObjects( $Link, 'GET', 'lists', $null )
+        return $this.GetObjects( $Link, 'lists', $null )
     }
 
     # Get information about all segments in a list
     [Object]GetListSegments( [string]$ListId ) {
         $Link = $this.ApiEndPoint + "lists/$ListId/segments"
-        return $this.GetObjects( $Link, 'GET', 'segments', $null )
+        return $this.GetObjects( $Link, 'segments', $null )
     }
 
     # Get information about a list’s interest categories
     [Object]GetListInterestCategories( [string]$ListId ) {
         $Link = $this.ApiEndPoint + "lists/$ListId/interest-categories"
-        return $this.GetObjects( $Link, 'GET', 'categories', $null )
+        return $this.GetObjects( $Link, 'categories', $null )
     }
 
     # Get information about a list’s interest categories
     [Object]GetListInterests( [string]$ListId, [string]$InterestCategoryId ) {
         $Link = $this.ApiEndPoint + "lists/$ListId/interest-categories/$InterestCategoryId/interests"
-        return $this.GetObjects( $Link, 'GET', 'interests', $null )
+        return $this.GetObjects( $Link, 'interests', $null )
     }
 
     # Get information about members in a list
     [Object]GetListMembers( [string]$ListId, [string]$Fields ) {
         $Link = $this.ApiEndPoint + "lists/$ListId/members"
-        return $this.GetObjects( $Link, 'GET', 'members', $Fields )
+        return $this.GetObjects( $Link, 'members', $Fields )
     }
 
     # Add a new list member
@@ -99,6 +96,13 @@ class MailChimp {
         $Link = $this.ApiEndPoint + "lists/$ListId/members/$SubscriberHash"
         return $this.InvokePatchRequest( $Link, $Parameters )
     }
+
+    # Add or update a list member (This is most useful for syncing subscriber data)
+    [Object]SyncListMember( [string]$ListId, [hashtable]$Parameters ) {
+        $SubscriberHash = $this.GetSubscriberHash($Parameters.email_address)
+        $Link = $this.ApiEndPoint + "lists/$ListId/members/$SubscriberHash"
+        return $this.InvokePutRequest( $Link, $Parameters )
+    }
     
     # Remove a list member
     [Object]RemoveListMember( [string]$ListId, [hashtable]$Parameters ) {
@@ -109,7 +113,7 @@ class MailChimp {
     
 
     # Get MailChimp objests
-    [Object]GetObjects( [string]$Uri, [string]$HttpMethod, [string]$ObjectName, [string]$Fields ) {
+    [Object]GetObjects( [string]$Uri, [string]$ObjectName, [string]$Fields ) {
         $Objects = @()
         $Response = @()
         $RequestOffset = 0
@@ -158,6 +162,18 @@ class MailChimp {
         }
     }
 
+    # PUT request to create or update a resource. This is most useful for syncing subscriber data
+    [PSCustomObject]InvokePutRequest( [string]$Uri, [hashtable]$Body ) {
+        try {
+            $BobyJson = $Body | ConvertTo-Json -Depth 100 -Compress
+            return Invoke-RestMethod -Uri $Uri -Method Put -Headers $this.Headers -Body $BobyJson -UserAgent $this.UserAgent -TimeoutSec $this.ApiRequestTimeoutSec -ContentType $this.ApiRequestContentType
+        }
+        catch {
+            throw "Request '$Uri' failed: $( $_.ErrorDetails.Message )"
+        }
+    }
+
+
     # DELETE request to remove a resource [!]
     [PSCustomObject]InvokeDeleteRequest( [string]$Uri, [hashtable]$Body ) {
         try {
@@ -188,6 +204,6 @@ class MailChimp {
     # The Experimental Method
     [Object]GetCustomObjets( [PSCustomObject]$CustomObject, [string]$rel, [string]$ObjectName ) {
         $Link = $this.GetLinkObject( $CustomObject, $Rel )
-        return $this.GetObjects( $Link.href, $Link.method, $ObjectName, $null )
+        return $this.GetObjects( $Link.href, $ObjectName, $null )
     }
 }
