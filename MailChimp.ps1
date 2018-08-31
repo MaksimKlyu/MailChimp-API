@@ -3,7 +3,7 @@
 # Author: Maxim A. Klyunnikov
 
 class MailChimp {
-    [string]           $Version = '2018.08.22'
+    [string]           $Version = '2018.08.31'
     [string]           $UserAgent = "PowerShell/MailChimp-API/3.0 (github.com/MaksimKlyu/MailChimp-API/$( $this.Version ))"
     [string]           $ApiEndPoint = 'https://<dc>.api.mailchimp.com/3.0/'
     [int16]            $ApiRequestCount = 10
@@ -18,12 +18,11 @@ class MailChimp {
         $ErrorActionPreference = 'Stop'
         if ( $ApiEndPoint.Trim() -eq '' ) {
             $this.ApiEndPoint = $this.ApiEndPoint -replace '<dc>', $this.GetDataCenter($ApiKey)
-        }
-        else {
+        } else {
             $this.ApiEndPoint = $ApiEndPoint
         }
         $this.SetHeaders($ApiKey)
-        
+
         # This resource is nothing more than links to other resources available through the API
         $this.ApiRoot = $this.InvokeGetRequest( $this.ApiEndPoint )
     }
@@ -41,7 +40,7 @@ class MailChimp {
         $EncodedCreds = [System.Convert]::ToBase64String([System.Text.Encoding]::ASCII.GetBytes("$($this.Version):$ApiKey"))
         $this.Headers = @{ Authorization = "Basic $EncodedCreds" }
     }
-    
+
     [void]SetApiRequestCount( [int16]$Count ) {
         if ($Count -gt 0) {
             $this.ApiRequestCount = $Count
@@ -103,14 +102,14 @@ class MailChimp {
         $Link = $this.ApiEndPoint + "lists/$ListId/members/$SubscriberHash"
         return $this.InvokePutRequest( $Link, $Parameters )
     }
-    
+
     # Remove a list member
     [Object]RemoveListMember( [string]$ListId, [hashtable]$Parameters ) {
         $SubscriberHash = $this.GetSubscriberHash($Parameters.email_address)
         $Link = $this.ApiEndPoint + "lists/$ListId/members/$SubscriberHash"
         return $this.InvokeDeleteRequest( $Link, $Parameters )
     }
-    
+
 
     # Get MailChimp objests
     [Object]GetObjects( [string]$Uri, [string]$ObjectName, [string]$Fields ) {
@@ -118,12 +117,11 @@ class MailChimp {
         $Response = @()
         $RequestOffset = 0
         do {
-            $Uri += "?offset=$RequestOffset"
-            $Uri += "&count=$( $this.ApiRequestCount )"
-            if ( $Fields.Trim() -ne '') {
-                $Uri += '&fields=' + $Fields.Trim() + ',total_items'
-            }
-            $Response = $this.InvokeGetRequest( $Uri )
+            $UriQuery = $Uri
+            $UriQuery += "?offset=$RequestOffset"
+            $UriQuery += "&count=$( $this.ApiRequestCount )"
+            if ( $Fields.Trim() -ne '') { $UriQuery += '&fields=' + $Fields.Trim() + ',total_items' }
+            $Response = $this.InvokeGetRequest( $UriQuery )
             $Objects += $Response.$( $ObjectName )
             $RequestOffset += $this.ApiRequestCount
         } while ( $RequestOffset -lt $Response.total_items )
@@ -134,8 +132,7 @@ class MailChimp {
     [PSCustomObject]InvokeGetRequest( [string]$Uri ) {
         try {
             return Invoke-RestMethod -Uri $Uri -Method Get -Headers $this.Headers -UserAgent $this.UserAgent -TimeoutSec $this.ApiRequestTimeoutSec
-        }
-        catch {
+        } catch {
             throw "Request '$Uri' failed: $( $_.ErrorDetails.Message )"
         }
     }
@@ -145,10 +142,9 @@ class MailChimp {
         try {
             $BobyJson = $Body | ConvertTo-Json -Depth 100 -Compress
             return Invoke-RestMethod -Uri $Uri -Method Post -Headers $this.Headers -Body $BobyJson -UserAgent $this.UserAgent -TimeoutSec $this.ApiRequestTimeoutSec -ContentType $this.ApiRequestContentType
-        }
-        catch {
+        } catch {
             throw "Request '$Uri' failed: $( $_.ErrorDetails.Message )"
-        }  
+        }
     }
 
     # PATCH request to update a resource
@@ -156,8 +152,7 @@ class MailChimp {
         try {
             $BobyJson = $Body | ConvertTo-Json -Depth 100 -Compress
             return Invoke-RestMethod -Uri $Uri -Method Patch -Headers $this.Headers -Body $BobyJson -UserAgent $this.UserAgent -TimeoutSec $this.ApiRequestTimeoutSec -ContentType $this.ApiRequestContentType
-        }
-        catch {
+        } catch {
             throw "Request '$Uri' failed: $( $_.ErrorDetails.Message )"
         }
     }
@@ -167,8 +162,7 @@ class MailChimp {
         try {
             $BobyJson = $Body | ConvertTo-Json -Depth 100 -Compress
             return Invoke-RestMethod -Uri $Uri -Method Put -Headers $this.Headers -Body $BobyJson -UserAgent $this.UserAgent -TimeoutSec $this.ApiRequestTimeoutSec -ContentType $this.ApiRequestContentType
-        }
-        catch {
+        } catch {
             throw "Request '$Uri' failed: $( $_.ErrorDetails.Message )"
         }
     }
@@ -179,8 +173,7 @@ class MailChimp {
         try {
             $BobyJson = $Body | ConvertTo-Json -Depth 100 -Compress
             return Invoke-RestMethod -Uri $Uri -Method Delete -Headers $this.Headers -Body $BobyJson -UserAgent $this.UserAgent -TimeoutSec $this.ApiRequestTimeoutSec -ContentType $this.ApiRequestContentType
-        }
-        catch {
+        } catch {
             throw "Request '$Uri' failed: $( $_.ErrorDetails.Message )"
         }
     }
@@ -191,7 +184,7 @@ class MailChimp {
         $Utf8 = New-Object -TypeName System.Text.UTF8Encoding
         return [System.BitConverter]::ToString($Md5.ComputeHash($Utf8.GetBytes( $Email.ToLower() ))).Replace('-', '').ToLower()
     }
-    
+
     # The Experimental Method
     [Object]GetLinkObject ( [PSCustomObject]$AnyObject, [string]$Rel ) {
         $Link = $AnyObject._links | Where-Object rel -eq $Rel
