@@ -27,7 +27,7 @@ Select List objects
 ```powershell
 $List = $lists | Where-Object Name -eq 'ListName'
 ```
-Get information about a list’s interest categories
+Get information about a list's interest categories
 ```powershell
 $ListInterestCategories = $MailChimp.GetListInterestCategories( $List.id )
 ```
@@ -44,8 +44,8 @@ $ListSegments = $MailChimp.GetListSegments( $List.id )
 ```
 Get information about members in a list
 ```powershell
-$Filds = 'members.id,members.email_address,members.status,members.merge_fields,members.interests'
-$ListMembers = $MailChimp.GetListMembers( $List.id, $Filds )
+$Fields = 'members.id,members.email_address,members.status,members.merge_fields,members.interests'
+$ListMembers = $MailChimp.GetListMembers( $List.id, $Fields )
 ```
 Add a new list member
 ```powershell
